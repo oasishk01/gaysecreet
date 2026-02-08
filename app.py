@@ -1,96 +1,71 @@
-"""Final Test Before Deploy"""
-import sqlite3
-import os
+import streamlit as st
+from datetime import datetime
 
-print("🧪 最終測試...")
-print("="*50)
+# Page config
+st.set_page_config(page_title="GaySecret Forum", page_icon="🌈")
 
-db_path = '/Users/danny/.openclaw/workspace/forum_final_test.db'
-if os.path.exists(db_path):
-    os.remove(db_path)
+st.title("🌈 GaySecret Forum")
+st.write("Safe anonymous space for Hong Kong LGBTQ+ community!")
 
-conn = sqlite3.connect(db_path)
-c = conn.cursor()
+# Session state for posts
+if "posts" not in st.session_state:
+    st.session_state.posts = []
 
-# Create all tables
-c.execute('''CREATE TABLE users (
-    id INTEGER PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, 
-    role TEXT DEFAULT 'user', avatar TEXT DEFAULT NULL,
-    bio TEXT DEFAULT '', email TEXT DEFAULT '',
-    join_date TEXT, last_active TEXT
-)''')
+# Navigation
+menu = st.sidebar.selectbox("Menu", ["Home", "Create Post"])
 
-c.execute('''CREATE TABLE posts (
-    id INTEGER PRIMARY KEY, title TEXT, content TEXT, author TEXT, 
-    date TEXT, category TEXT DEFAULT '一般', view_count INTEGER DEFAULT 0
-)''')
+# Home page
+if menu == "Home":
+    st.header("All Posts")
+    
+    if not st.session_state.posts:
+        st.info("No posts yet. Be the first to share!")
+    else:
+        for i, post in enumerate(st.session_state.posts):
+            st.markdown("---")
+            st.subheader(post["title"])
+            st.write(f"📁 {post['category']} | 🕐 {post['time']}")
+            st.write(post["content"])
+            
+            # Replies section
+            st.write("💬 Replies:")
+            if post["replies"]:
+                for reply in post["replies"]:
+                    st.write(f"  • {reply}")
+            else:
+                st.write("  _No replies yet_")
+            
+            # Add reply
+            reply = st.text_input(f"Reply to post #{i+1}", key=f"reply_{i}")
+            if st.button(f"Submit Reply #{i+1}", key=f"btn_reply_{i}"):
+                if reply:
+                    post["replies"].append(f"{reply}")
+                    st.success("Reply submitted!")
+                    st.rerun()
 
-c.execute('''CREATE TABLE messages (
-    id INTEGER PRIMARY KEY, post_id INTEGER, content TEXT, 
-    author TEXT, date TEXT
-)''')
+# Create post page
+elif menu == "Create Post":
+    st.header("Create New Post")
+    
+    title = st.text_input("Title")
+    content = st.text_area("Content")
+    category = st.selectbox("Category", ["General", "Events", "Help", "Share"])
+    
+    if st.button("Publish Post"):
+        if title and content:
+            st.session_state.posts.append({
+                "title": title,
+                "content": content,
+                "category": category,
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "replies": []
+            })
+            st.success("✅ Post published successfully!")
+            st.balloons()
+        else:
+            st.error("Please fill in title and content!")
 
-c.execute('''CREATE TABLE notifications (
-    id INTEGER PRIMARY KEY, user TEXT, type TEXT, 
-    message TEXT, link TEXT, date TEXT, read INTEGER DEFAULT 0
-)''')
-
-conn.commit()
-
-# Test user registration flow
-import hashlib
-
-def hash_password(pw):
-    return hashlib.sha256(pw.encode()).hexdigest()
-
-# Simulate registration
-c.execute("INSERT INTO users (username, password_hash, role, bio, email, join_date, last_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
-         ('admin', hash_password('admin123'), 'admin', '測試管理員', 'admin@test.com', '2026-02-07', '2026-02-07'))
-conn.commit()
-
-c.execute("INSERT INTO users (username, password_hash, role, join_date) VALUES (?, ?, ?, ?)",
-         ('user1', hash_password('pass123'), 'user', '2026-02-07'))
-conn.commit()
-
-# Test post creation
-c.execute("INSERT INTO posts (title, content, author, date, category, view_count) VALUES (?, ?, ?, ?, ?, ?)",
-         ('歡迎來到討論區', '呢度係Gay Spa香港討論區！歡迎大家！', 'admin', '2026-02-07 23:55', '通知', 10))
-conn.commit()
-
-c.execute("INSERT INTO messages (post_id, content, author, date) VALUES (?, ?, ?, ?)",
-         (1, '好正呀！呢個討論區！', 'user1', '23:56'))
-conn.commit()
-
-# Test notification
-c.execute("INSERT INTO notifications (user, type, message, date, read) VALUES (?, ?, ?, ?, ?)",
-         ('admin', 'new_user', '新用戶user1已加入！', '2026-02-07', 0))
-conn.commit()
-
-# Verify all data
-tests = [
-    ("User count", "SELECT COUNT(*) FROM users", 2),
-    ("Post count", "SELECT COUNT(*) FROM posts", 1),
-    ("Message count", "SELECT COUNT(*) FROM messages", 1),
-    ("Notification count", "SELECT COUNT(*) FROM notifications", 1),
-    ("Admin exists", "SELECT username FROM users WHERE role='admin'", 'admin'),
-    ("User post count", "SELECT COUNT(*) FROM posts WHERE author='user1'", 1),
-    ("Unread notifs", "SELECT COUNT(*) FROM notifications WHERE read=0", 1),
-]
-
-all_pass = True
-for name, query, expected in tests:
-    c.execute(query)
-    result = c.fetchone()[0]
-    status = "✅" if result == expected else "❌"
-    if result != expected:
-        all_pass = False
-    print(f"  {status} {name}: {result} (expected: {expected})")
-
-conn.close()
-os.remove(db_path)
-
-print("\n" + "="*50)
-if all_pass:
-    print("✅ 所有測試通過！可以Deploy！")
-else:
-    print("❌ 有測試失敗，請檢查！")
+# Footer
+st.sidebar.markdown("---")
+st.sidebar.write("🌈 GaySecret Forum v1.0")
+st.sidebar.write("Made with Streamlit")
